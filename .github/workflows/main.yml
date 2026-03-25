@@ -1,0 +1,30 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: جلب الملفات
+        uses: actions/checkout@v4
+
+      - name: تجهيز بايثون
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: تثبيت المكتبات
+        run: pip install flet pandas openpyxl
+
+      - name: بناء تطبيق الأندرويد
+        run: yes | flet build apk
+
+      - name: استخراج التطبيق الجاهز
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhatsApp_App_APK
+          path: build/apk/**/*.apk
