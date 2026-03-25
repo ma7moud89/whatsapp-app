@@ -57,7 +57,7 @@ def main(page: ft.Page):
         except:
             return "خطأ بالتاريخ", "#9E9E9E" 
 
-    # ------------------ نظام النسخ الاحتياطي والاستعادة الذكي (الترس العلوي) ------------------
+    # ------------------ نظام النسخ الاحتياطي ------------------
     def backup_database(e):
         try:
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -117,6 +117,29 @@ def main(page: ft.Page):
         ]
     )
 
+    # ------------------ ميزة التقويم (Date Pickers) ------------------
+    def on_start_date_change(e):
+        if start_date_picker.value:
+            txt_start_date.value = start_date_picker.value.strftime("%Y-%m-%d")
+            page.update()
+
+    def on_end_date_change(e):
+        if end_date_picker.value:
+            txt_end_date.value = end_date_picker.value.strftime("%Y-%m-%d")
+            page.update()
+
+    start_date_picker = ft.DatePicker(
+        on_change=on_start_date_change,
+        first_date=datetime.datetime(2020, 1, 1),
+        last_date=datetime.datetime(2040, 12, 31)
+    )
+    end_date_picker = ft.DatePicker(
+        on_change=on_end_date_change,
+        first_date=datetime.datetime(2020, 1, 1),
+        last_date=datetime.datetime(2040, 12, 31)
+    )
+    page.overlay.extend([start_date_picker, end_date_picker])
+
     # ------------------ دوال إضافة الخدمة ------------------
     txt_new_service = ft.TextField(label="اسم الخدمة الجديدة", width=300)
     
@@ -168,8 +191,14 @@ def main(page: ft.Page):
     btn_add_service = ft.IconButton(icon=ft.Icons.ADD_CIRCLE, icon_color="#2196F3", icon_size=35, on_click=open_service_dialog)
     row_service = ft.Row([dd_service, btn_add_service], alignment=ft.MainAxisAlignment.CENTER)
     
-    txt_start_date = ft.TextField(label="تاريخ البدء (YYYY-MM-DD)", width=350, value=str(datetime.date.today()))
-    txt_end_date = ft.TextField(label="تاريخ الانتهاء (YYYY-MM-DD)", width=350)
+    # دمج أزرار التقويم بجوار حقول التاريخ
+    txt_start_date = ft.TextField(label="تاريخ البدء (YYYY-MM-DD)", width=290, value=str(datetime.date.today()))
+    btn_start_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: start_date_picker.pick_date())
+    row_start_date = ft.Row([txt_start_date, btn_start_date], alignment=ft.MainAxisAlignment.CENTER)
+    
+    txt_end_date = ft.TextField(label="تاريخ الانتهاء (YYYY-MM-DD)", width=290)
+    btn_end_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: end_date_picker.pick_date())
+    row_end_date = ft.Row([txt_end_date, btn_end_date], alignment=ft.MainAxisAlignment.CENTER)
     
     txt_paid = ft.TextField(label="المدفوع", width=170, keyboard_type=ft.KeyboardType.NUMBER)
     txt_remaining = ft.TextField(label="المتبقي", width=170, keyboard_type=ft.KeyboardType.NUMBER)
@@ -204,7 +233,7 @@ def main(page: ft.Page):
     btn_save = ft.Button("حفظ بيانات العميل", icon=ft.Icons.SAVE, on_click=save_customer, width=350, style=ft.ButtonStyle(bgcolor="#2196F3", color="#FFFFFF"))
 
     add_container = ft.Column(
-        [txt_name, txt_phone, row_service, txt_start_date, txt_end_date, row_money, txt_support, txt_cust_code, txt_act_code, btn_save],
+        [txt_name, txt_phone, row_service, row_start_date, row_end_date, row_money, txt_support, txt_cust_code, txt_act_code, btn_save],
         scroll=ft.ScrollMode.AUTO,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         spacing=10,
@@ -216,7 +245,7 @@ def main(page: ft.Page):
     txt_search = ft.TextField(label="بحث (بالاسم أو الواتساب)...", width=350, prefix_icon=ft.Icons.SEARCH)
     customers_list = ft.ListView(expand=True, spacing=10)
 
-    # 🌟 إضافة نافذة تأكيد الحذف 🌟
+    # دالة تأكيد الحذف
     def confirm_delete_action(e):
         cust_id = dlg_confirm_delete.data
         conn = sqlite3.connect(DB_NAME)
@@ -243,6 +272,13 @@ def main(page: ft.Page):
         dlg_confirm_delete.data = cust_id
         dlg_confirm_delete.open = True
         page.update()
+
+    # 🌟 دالة الواتساب القوية للموبايل 🌟
+    def open_whatsapp(e, phone_num):
+        # تنظيف الرقم من أي مسافات أو رموز لضمان عمل الرابط
+        clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
+        # هذا البروتوكول يجبر نظام الأندرويد على فتح تطبيق الواتساب مباشرة
+        page.launch_url(f"whatsapp://send?phone={clean_phone}")
 
     def load_customers(e=None):
         customers_list.controls.clear()
@@ -272,9 +308,7 @@ def main(page: ft.Page):
                             ]),
                             ft.Text(f"الخدمة: {service} | كود: {act_code}"),
                             ft.Row([
-                                # 🌟 التحديث هنا: استخدام دالة صفحة الموبايل لفتح الواتساب 🌟
-                                ft.Button("واتساب", icon=ft.Icons.CHAT, on_click=lambda e, p=phone: page.launch_url(f"https://wa.me/{p}"), style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF")),
-                                # 🌟 التحديث هنا: استخدام دالة نافذة التأكيد قبل الحذف 🌟
+                                ft.Button("واتساب", icon=ft.Icons.CHAT, on_click=lambda e, p=phone: open_whatsapp(e, p), style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF")),
                                 ft.IconButton(icon=ft.Icons.DELETE, icon_color="#F44336", on_click=lambda e, cid=c_id: prompt_delete(e, cid))
                             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
                         ])
