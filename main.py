@@ -5,7 +5,6 @@ import os
 import pandas as pd
 import shutil
 
-# 1. إعداد قاعدة البيانات الشاملة
 DB_NAME = "app_data.dat"
 
 def init_db():
@@ -40,7 +39,6 @@ def main(page: ft.Page):
     
     init_db()
 
-    # ------------------ أدوات مساعدة ------------------
     def show_snack(message, color_hex):
         page.overlay.append(ft.SnackBar(ft.Text(message, color="#FFFFFF"), bgcolor=color_hex, open=True))
         page.update()
@@ -57,7 +55,6 @@ def main(page: ft.Page):
         except:
             return "خطأ بالتاريخ", "#9E9E9E" 
 
-    # ------------------ نظام النسخ الاحتياطي ------------------
     def backup_database(e):
         try:
             downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -117,15 +114,15 @@ def main(page: ft.Page):
         ]
     )
 
-    # ------------------ ميزة التقويم (Date Pickers) ------------------
+    # ------------------ ميزة التقويم (تم حل المشكلة للأندرويد) ------------------
     def on_start_date_change(e):
-        if start_date_picker.value:
-            txt_start_date.value = start_date_picker.value.strftime("%Y-%m-%d")
+        if e.control.value:
+            txt_start_date.value = e.control.value.strftime("%Y-%m-%d")
             page.update()
 
     def on_end_date_change(e):
-        if end_date_picker.value:
-            txt_end_date.value = end_date_picker.value.strftime("%Y-%m-%d")
+        if e.control.value:
+            txt_end_date.value = e.control.value.strftime("%Y-%m-%d")
             page.update()
 
     start_date_picker = ft.DatePicker(
@@ -138,7 +135,6 @@ def main(page: ft.Page):
         first_date=datetime.datetime(2020, 1, 1),
         last_date=datetime.datetime(2040, 12, 31)
     )
-    page.overlay.extend([start_date_picker, end_date_picker])
 
     # ------------------ دوال إضافة الخدمة ------------------
     txt_new_service = ft.TextField(label="اسم الخدمة الجديدة", width=300)
@@ -177,11 +173,9 @@ def main(page: ft.Page):
             ft.TextButton("إلغاء", on_click=lambda e: setattr(dlg_add_service, 'open', False) or page.update())
         ],
     )
-    page.overlay.append(dlg_add_service)
     
     def open_service_dialog(e):
-        dlg_add_service.open = True
-        page.update()
+        page.open(dlg_add_service)
 
     # ------------------ صفحة إضافة العميل ------------------
     txt_name = ft.TextField(label="اسم العميل *", width=350)
@@ -191,13 +185,13 @@ def main(page: ft.Page):
     btn_add_service = ft.IconButton(icon=ft.Icons.ADD_CIRCLE, icon_color="#2196F3", icon_size=35, on_click=open_service_dialog)
     row_service = ft.Row([dd_service, btn_add_service], alignment=ft.MainAxisAlignment.CENTER)
     
-    # دمج أزرار التقويم بجوار حقول التاريخ
+    # 🌟 التحديث هنا: استخدام page.open لفتح التقويم بدلاً من pick_date 🌟
     txt_start_date = ft.TextField(label="تاريخ البدء (YYYY-MM-DD)", width=290, value=str(datetime.date.today()))
-    btn_start_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: start_date_picker.pick_date())
+    btn_start_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: page.open(start_date_picker))
     row_start_date = ft.Row([txt_start_date, btn_start_date], alignment=ft.MainAxisAlignment.CENTER)
     
     txt_end_date = ft.TextField(label="تاريخ الانتهاء (YYYY-MM-DD)", width=290)
-    btn_end_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: end_date_picker.pick_date())
+    btn_end_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: page.open(end_date_picker))
     row_end_date = ft.Row([txt_end_date, btn_end_date], alignment=ft.MainAxisAlignment.CENTER)
     
     txt_paid = ft.TextField(label="المدفوع", width=170, keyboard_type=ft.KeyboardType.NUMBER)
@@ -245,7 +239,6 @@ def main(page: ft.Page):
     txt_search = ft.TextField(label="بحث (بالاسم أو الواتساب)...", width=350, prefix_icon=ft.Icons.SEARCH)
     customers_list = ft.ListView(expand=True, spacing=10)
 
-    # دالة تأكيد الحذف
     def confirm_delete_action(e):
         cust_id = dlg_confirm_delete.data
         conn = sqlite3.connect(DB_NAME)
@@ -253,7 +246,7 @@ def main(page: ft.Page):
         cursor.execute("DELETE FROM customers WHERE id=?", (cust_id,))
         conn.commit()
         conn.close()
-        dlg_confirm_delete.open = False
+        page.close(dlg_confirm_delete)
         show_snack("تم حذف العميل بنجاح!", "#F44336")
         load_customers()
 
@@ -262,23 +255,19 @@ def main(page: ft.Page):
         content=ft.Text("هل أنت متأكد من حذف بيانات هذا العميل نهائياً؟"),
         actions=[
             ft.TextButton("نعم، احذف", on_click=confirm_delete_action, style=ft.ButtonStyle(color="#F44336")),
-            ft.TextButton("إلغاء", on_click=lambda e: setattr(dlg_confirm_delete, 'open', False) or page.update())
+            ft.TextButton("إلغاء", on_click=lambda e: page.close(dlg_confirm_delete))
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.overlay.append(dlg_confirm_delete)
 
     def prompt_delete(e, cust_id):
         dlg_confirm_delete.data = cust_id
-        dlg_confirm_delete.open = True
-        page.update()
+        page.open(dlg_confirm_delete)
 
-    # 🌟 دالة الواتساب القوية للموبايل 🌟
+    # 🌟 التحديث هنا: الرابط المباشر الذي يتخطى أذونات الأندرويد 🌟
     def open_whatsapp(e, phone_num):
-        # تنظيف الرقم من أي مسافات أو رموز لضمان عمل الرابط
         clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
-        # هذا البروتوكول يجبر نظام الأندرويد على فتح تطبيق الواتساب مباشرة
-        page.launch_url(f"whatsapp://send?phone={clean_phone}")
+        page.launch_url(f"https://api.whatsapp.com/send?phone={clean_phone}")
 
     def load_customers(e=None):
         customers_list.controls.clear()
