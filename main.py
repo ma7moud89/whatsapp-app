@@ -4,6 +4,7 @@ import datetime
 import os
 import pandas as pd
 import shutil
+import webbrowser
 
 DB_NAME = "app_data.dat"
 
@@ -114,15 +115,14 @@ def main(page: ft.Page):
         ]
     )
 
-    # ------------------ ميزة التقويم (تم حل المشكلة للأندرويد) ------------------
     def on_start_date_change(e):
-        if e.control.value:
-            txt_start_date.value = e.control.value.strftime("%Y-%m-%d")
+        if start_date_picker.value:
+            txt_start_date.value = start_date_picker.value.strftime("%Y-%m-%d")
             page.update()
 
     def on_end_date_change(e):
-        if e.control.value:
-            txt_end_date.value = e.control.value.strftime("%Y-%m-%d")
+        if end_date_picker.value:
+            txt_end_date.value = end_date_picker.value.strftime("%Y-%m-%d")
             page.update()
 
     start_date_picker = ft.DatePicker(
@@ -130,24 +130,15 @@ def main(page: ft.Page):
         first_date=datetime.datetime(2020, 1, 1),
         last_date=datetime.datetime(2040, 12, 31)
     )
+    
     end_date_picker = ft.DatePicker(
         on_change=on_end_date_change,
         first_date=datetime.datetime(2020, 1, 1),
         last_date=datetime.datetime(2040, 12, 31)
     )
 
-    # ------------------ دوال إضافة الخدمة ------------------
     txt_new_service = ft.TextField(label="اسم الخدمة الجديدة", width=300)
     
-    def load_services():
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM services")
-        services = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        dd_service.options = [ft.dropdown.Option(s) for s in services]
-        page.update()
-
     def save_new_service(e):
         new_service = txt_new_service.value.strip()
         if new_service:
@@ -158,40 +149,141 @@ def main(page: ft.Page):
                 conn.close()
                 show_snack("تمت إضافة الخدمة بنجاح!", "#4CAF50") 
                 txt_new_service.value = ""
-                dlg_add_service.open = False
+                close_service_dialog(e)
                 load_services() 
             except sqlite3.IntegrityError:
                 show_snack("الخدمة موجودة مسبقاً!", "#F44336") 
         else:
             show_snack("اكتب اسم الخدمة", "#F44336")
 
+    def close_service_dialog(e):
+        try:
+            page.close(dlg_add_service)
+        except:
+            dlg_add_service.open = False
+            page.update()
+
     dlg_add_service = ft.AlertDialog(
         title=ft.Text("إضافة خدمة جديدة"),
         content=txt_new_service,
         actions=[
             ft.TextButton("حفظ", on_click=save_new_service),
-            ft.TextButton("إلغاء", on_click=lambda e: setattr(dlg_add_service, 'open', False) or page.update())
+            ft.TextButton("إلغاء", on_click=close_service_dialog)
         ],
     )
-    
-    def open_service_dialog(e):
-        page.open(dlg_add_service)
 
-    # ------------------ صفحة إضافة العميل ------------------
+    def confirm_delete_action(e):
+        cust_id = dlg_confirm_delete.data
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM customers WHERE id=?", (cust_id,))
+        conn.commit()
+        conn.close()
+        close_delete_dialog(e)
+        show_snack("تم حذف العميل بنجاح!", "#F44336")
+        load_customers()
+
+    def close_delete_dialog(e):
+        try:
+            page.close(dlg_confirm_delete)
+        except:
+            dlg_confirm_delete.open = False
+            page.update()
+
+    dlg_confirm_delete = ft.AlertDialog(
+        title=ft.Text("تأكيد الحذف", weight="bold"),
+        content=ft.Text("هل أنت متأكد من حذف بيانات هذا العميل نهائياً؟"),
+        actions=[
+            ft.TextButton("نعم، احذف", on_click=confirm_delete_action, style=ft.ButtonStyle(color="#F44336")),
+            ft.TextButton("إلغاء", on_click=close_delete_dialog)
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+
+    page.overlay.extend([start_date_picker, end_date_picker, dlg_add_service, dlg_confirm_delete])
+
+    def open_start_date(e):
+        try:
+            page.open(start_date_picker)
+        except:
+            start_date_picker.open = True
+            page.update()
+
+    def open_end_date(e):
+        try:
+            page.open(end_date_picker)
+        except:
+            end_date_picker.open = True
+            page.update()
+
+    def open_service_dialog(e):
+        try:
+            page.open(dlg_add_service)
+        except:
+            dlg_add_service.open = True
+            page.update()
+
+    def prompt_delete(e, cust_id):
+        dlg_confirm_delete.data = cust_id
+        try:
+            page.open(dlg_confirm_delete)
+        except:
+            dlg_confirm_delete.open = True
+            page.update()
+
+    # 🌟 دالة الواتساب المتوافقة مع الكمبيوتر والموبايل 100% 🌟
+    async def open_whatsapp(e):
+        try:
+            phone_num = e.control.data
+            clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
+            if not clean_phone:
+                show_snack("رقم الواتساب غير صالح", "#F44336")
+                return
+            
+            if len(clean_phone) == 11 and clean_phone.startswith("01"):
+                clean_phone = "2" + clean_phone
+
+            url = f"https://api.whatsapp.com/send?phone={clean_phone}"
+            
+            # إذا كان يعمل من الموبايل
+            if page.platform == ft.PagePlatform.ANDROID or page.platform == ft.PagePlatform.IOS:
+                if hasattr(ft, "UrlLauncher"):
+                    res = ft.UrlLauncher().launch_url(url)
+                    if hasattr(res, "__await__"):
+                        await res
+                else:
+                    res = page.launch_url(url)
+                    if hasattr(res, "__await__"):
+                        await res
+            # إذا كان يعمل من الكمبيوتر 
+            else:
+                webbrowser.open(url)
+                
+        except Exception as ex:
+            show_snack(f"تعذر الفتح: {str(ex)}", "#F44336")
+
     txt_name = ft.TextField(label="اسم العميل *", width=350)
     txt_phone = ft.TextField(label="رقم الواتساب *", width=350, keyboard_type=ft.KeyboardType.PHONE)
     
+    def load_services():
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM services")
+        services = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        dd_service.options = [ft.dropdown.Option(s) for s in services]
+        page.update()
+
     dd_service = ft.Dropdown(label="البرنامج", width=290)
     btn_add_service = ft.IconButton(icon=ft.Icons.ADD_CIRCLE, icon_color="#2196F3", icon_size=35, on_click=open_service_dialog)
     row_service = ft.Row([dd_service, btn_add_service], alignment=ft.MainAxisAlignment.CENTER)
     
-    # 🌟 التحديث هنا: استخدام page.open لفتح التقويم بدلاً من pick_date 🌟
     txt_start_date = ft.TextField(label="تاريخ البدء (YYYY-MM-DD)", width=290, value=str(datetime.date.today()))
-    btn_start_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: page.open(start_date_picker))
+    btn_start_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=open_start_date)
     row_start_date = ft.Row([txt_start_date, btn_start_date], alignment=ft.MainAxisAlignment.CENTER)
     
     txt_end_date = ft.TextField(label="تاريخ الانتهاء (YYYY-MM-DD)", width=290)
-    btn_end_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=lambda e: page.open(end_date_picker))
+    btn_end_date = ft.IconButton(icon=ft.Icons.CALENDAR_MONTH, icon_color="#2196F3", on_click=open_end_date)
     row_end_date = ft.Row([txt_end_date, btn_end_date], alignment=ft.MainAxisAlignment.CENTER)
     
     txt_paid = ft.TextField(label="المدفوع", width=170, keyboard_type=ft.KeyboardType.NUMBER)
@@ -235,39 +327,8 @@ def main(page: ft.Page):
         visible=True
     )
 
-    # ------------------ صفحة قائمة العملاء والبحث ------------------
     txt_search = ft.TextField(label="بحث (بالاسم أو الواتساب)...", width=350, prefix_icon=ft.Icons.SEARCH)
     customers_list = ft.ListView(expand=True, spacing=10)
-
-    def confirm_delete_action(e):
-        cust_id = dlg_confirm_delete.data
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM customers WHERE id=?", (cust_id,))
-        conn.commit()
-        conn.close()
-        page.close(dlg_confirm_delete)
-        show_snack("تم حذف العميل بنجاح!", "#F44336")
-        load_customers()
-
-    dlg_confirm_delete = ft.AlertDialog(
-        title=ft.Text("تأكيد الحذف", weight="bold"),
-        content=ft.Text("هل أنت متأكد من حذف بيانات هذا العميل نهائياً؟"),
-        actions=[
-            ft.TextButton("نعم، احذف", on_click=confirm_delete_action, style=ft.ButtonStyle(color="#F44336")),
-            ft.TextButton("إلغاء", on_click=lambda e: page.close(dlg_confirm_delete))
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
-
-    def prompt_delete(e, cust_id):
-        dlg_confirm_delete.data = cust_id
-        page.open(dlg_confirm_delete)
-
-    # 🌟 التحديث هنا: الرابط المباشر الذي يتخطى أذونات الأندرويد 🌟
-    def open_whatsapp(e, phone_num):
-        clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
-        page.launch_url(f"https://api.whatsapp.com/send?phone={clean_phone}")
 
     def load_customers(e=None):
         customers_list.controls.clear()
@@ -297,7 +358,7 @@ def main(page: ft.Page):
                             ]),
                             ft.Text(f"الخدمة: {service} | كود: {act_code}"),
                             ft.Row([
-                                ft.Button("واتساب", icon=ft.Icons.CHAT, on_click=lambda e, p=phone: open_whatsapp(e, p), style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF")),
+                                ft.Button("واتساب", icon=ft.Icons.CHAT, data=phone, on_click=open_whatsapp, style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF")),
                                 ft.IconButton(icon=ft.Icons.DELETE, icon_color="#F44336", on_click=lambda e, cid=c_id: prompt_delete(e, cid))
                             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
                         ])
@@ -309,7 +370,6 @@ def main(page: ft.Page):
 
     txt_search.on_change = load_customers
 
-    # ------------------ نظام التصدير التلقائي للإكسل ------------------
     def export_excel(e):
         try:
             conn = sqlite3.connect(DB_NAME)
@@ -348,7 +408,6 @@ def main(page: ft.Page):
         visible=False
     )
 
-    # ------------------ شريط الأزرار العلوي (التنقل) ------------------
     def tab_changed(e, index):
         if index == 0:
             add_container.visible = True
