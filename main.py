@@ -1,6 +1,5 @@
 import flet as ft
 import sqlite3
-import webbrowser
 import datetime
 import os
 import pandas as pd
@@ -79,7 +78,6 @@ def main(page: ft.Page):
             if not os.path.exists(downloads_dir):
                 downloads_dir = os.getcwd()
 
-            # البحث عن أحدث ملف نسخة احتياطية في التنزيلات
             backup_files = []
             for f in os.listdir(downloads_dir):
                 if f.startswith("Backup_Data_") and f.endswith(".dat"):
@@ -89,10 +87,8 @@ def main(page: ft.Page):
                 show_snack("لم يتم العثور على أي نسخة احتياطية في التنزيلات!", "#F44336")
                 return
 
-            # اختيار أحدث ملف تم إنشاؤه
             latest_backup = max(backup_files, key=os.path.getmtime)
             
-            # استعادة الملف
             shutil.copy2(latest_backup, DB_NAME)
             load_services()
             load_customers()
@@ -220,14 +216,33 @@ def main(page: ft.Page):
     txt_search = ft.TextField(label="بحث (بالاسم أو الواتساب)...", width=350, prefix_icon=ft.Icons.SEARCH)
     customers_list = ft.ListView(expand=True, spacing=10)
 
-    def delete_customer(cust_id):
+    # 🌟 إضافة نافذة تأكيد الحذف 🌟
+    def confirm_delete_action(e):
+        cust_id = dlg_confirm_delete.data
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM customers WHERE id=?", (cust_id,))
         conn.commit()
         conn.close()
-        show_snack("تم الحذف بنجاح!", "#F44336")
+        dlg_confirm_delete.open = False
+        show_snack("تم حذف العميل بنجاح!", "#F44336")
         load_customers()
+
+    dlg_confirm_delete = ft.AlertDialog(
+        title=ft.Text("تأكيد الحذف", weight="bold"),
+        content=ft.Text("هل أنت متأكد من حذف بيانات هذا العميل نهائياً؟"),
+        actions=[
+            ft.TextButton("نعم، احذف", on_click=confirm_delete_action, style=ft.ButtonStyle(color="#F44336")),
+            ft.TextButton("إلغاء", on_click=lambda e: setattr(dlg_confirm_delete, 'open', False) or page.update())
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.overlay.append(dlg_confirm_delete)
+
+    def prompt_delete(e, cust_id):
+        dlg_confirm_delete.data = cust_id
+        dlg_confirm_delete.open = True
+        page.update()
 
     def load_customers(e=None):
         customers_list.controls.clear()
@@ -257,8 +272,10 @@ def main(page: ft.Page):
                             ]),
                             ft.Text(f"الخدمة: {service} | كود: {act_code}"),
                             ft.Row([
-                                ft.Button("واتساب", icon=ft.Icons.CHAT, on_click=lambda e, p=phone: webbrowser.open(f"https://wa.me/{p}"), style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF")),
-                                ft.IconButton(icon=ft.Icons.DELETE, icon_color="#F44336", on_click=lambda e, cid=c_id: delete_customer(cid))
+                                # 🌟 التحديث هنا: استخدام دالة صفحة الموبايل لفتح الواتساب 🌟
+                                ft.Button("واتساب", icon=ft.Icons.CHAT, on_click=lambda e, p=phone: page.launch_url(f"https://wa.me/{p}"), style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF")),
+                                # 🌟 التحديث هنا: استخدام دالة نافذة التأكيد قبل الحذف 🌟
+                                ft.IconButton(icon=ft.Icons.DELETE, icon_color="#F44336", on_click=lambda e, cid=c_id: prompt_delete(e, cid))
                             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
                         ])
                     )
